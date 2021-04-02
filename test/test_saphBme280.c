@@ -27,6 +27,11 @@ void tearDown(void) {
  *
  * */
 
+#define NO_ERROR 0
+#define ERROR_PLATFORM_GENERIC -2
+#define COMM_ERROR_WRITE_AMOUNT -11
+#define COMM_ERROR_READ_AMOUNT -12
+
 saphBmeDevice_t helper_createBmeDevice(void){
     uint8_t deviceAddr = 0xF7;
     saphBmeDevice_t bmeDevice = {deviceAddr};
@@ -40,28 +45,102 @@ void test_saphBme280_initialises(void) {
     TEST_ASSERT_EQUAL_UINT8(deviceAddr, bmeDevice.address);
 }
 
+// #############################################
+// # Test group _getId
+// #############################################
+
 void test_saphBme280_getId(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t expectedDeviceId = 0x58; //according to the BME280 datasheet
     uint8_t idRegisterAddr = 0xD0;
 
-    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 0);
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
     uint8_t response = expectedDeviceId;
     i2c_handler_read_ExpectAnyArgsAndReturn(1);
     i2c_handler_read_ReturnArrayThruPtr_buffer(&response, 1);
 
-    uint8_t actualId = saphBme280_getId(&fakeDevice);
-    TEST_ASSERT_EQUAL_UINT8(expectedDeviceId, actualId);
+    int32_t actualId = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT16(expectedDeviceId, actualId);
 }
 
-void test_saphBme280_resetTheDevice(void){
+void test_saphBme280_getId_returnsErrorOnFailedWriteAmount(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int16_t expectedError = COMM_ERROR_WRITE_AMOUNT;
+    uint8_t idRegisterAddr = 0xD0;
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 0);
+    int16_t errorCode = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT16(expectedError, errorCode);
+}
+
+void test_saphBme280_getId_returnsI2cErrorCodeIfGenericHardwareErrorOnWrite(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int16_t expectedError = ERROR_PLATFORM_GENERIC; // Supposedly the generic error code for the pico
+    uint8_t idRegisterAddr = 0xD0;
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, expectedError);
+    int16_t errorCode = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT16(expectedError, errorCode);
+}
+
+void test_saphBme280_getId_returnsErrorOnFailedReadAmount(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int16_t expectedError = COMM_ERROR_READ_AMOUNT;
+    uint8_t idRegisterAddr = 0xD0;
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(0);
+    int16_t errorCode = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT16(expectedError, errorCode);
+}
+
+void test_saphBme280_getId_returnsI2cErrorCodeIfGenericHardwareErrorOnRead(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int16_t expectedError = ERROR_PLATFORM_GENERIC;
+    uint8_t idRegisterAddr = 0xD0;
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(expectedError);
+    int16_t errorCode = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT16(expectedError, errorCode);
+}
+
+// #############################################
+// # Test group _resetDevice
+// #############################################
+
+void test_saphBme280_reset_deviceIsReset(void){
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t resetRegisterAddr = 0xE0;
-    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &resetRegisterAddr, 1, 1, 0);
+    uint8_t registerValueForResetting = 0xB6;
+    uint8_t buffer[2] = {resetRegisterAddr, registerValueForResetting};
+    uint32_t amount = 2;
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, buffer, amount, amount, amount);
+    int32_t result = saphBme280_resetDevice(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_NO_ERROR, result);
 }
 
-//void test_saphBme280_setSensorMode(void){
-//    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-//
-//
-//}
+void test_saphBme280_reset_returnsErrorOnFailedWriteAmount(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int32_t expectedError = COMM_ERROR_WRITE_AMOUNT;
+    i2c_handler_write_ExpectAnyArgsAndReturn(0);
+    int32_t errorCode = saphBme280_resetDevice(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
+}
+
+void test_saphBme280_reset_returnsI2cErrorCodeIfGenericHardwareErrorOnWrite(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int32_t expectedError = ERROR_PLATFORM_GENERIC;
+    i2c_handler_write_ExpectAnyArgsAndReturn(ERROR_PLATFORM_GENERIC);
+    int32_t errorCode = saphBme280_resetDevice(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
+}
+
+// #############################################
+// # Test group _setSensorMode
+// #############################################
+
+void test_saphBme280_setSensorMode(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    TEST_FAIL_MESSAGE("Not implemented yet");
+}

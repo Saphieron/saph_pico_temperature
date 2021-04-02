@@ -30,7 +30,7 @@ void i2c_handler_disable(void) {
 }
 
 
-int8_t i2c_handler_selectHwInstance(uint8_t device_num) {
+int32_t i2c_handler_selectHwInstance(uint8_t device_num) {
     int8_t result = 0;
     switch (device_num) {
         case 0:
@@ -50,12 +50,12 @@ uint32_t i2c_handler_set_baudrate(uint32_t baudrate) {
     return i2c_set_baudrate(selectedI2CInstance, baudrate);
 }
 
-int8_t i2c_handler_write(uint8_t addr, uint8_t* buffer, uint32_t amount) {
+int32_t i2c_handler_write(uint8_t addr, uint8_t* buffer, uint32_t amount) {
     printf("handler called with 0x%02X, %p, %lu\n", addr, buffer, amount);
     return i2c_write_blocking(selectedI2CInstance, addr, buffer, amount, false);
 }
 
-int8_t i2c_handler_read(uint8_t addr, uint8_t* buffer, uint32_t amount) {
+int32_t i2c_handler_read(uint8_t addr, uint8_t* buffer, uint32_t amount) {
 //    absolute_time_t currentTime = get_absolute_time();
 //    return i2c_read_blocking_until(selectedI2CInstance, addr, buffer, amount, false, currentTime + 10000);
     return i2c_read_blocking(selectedI2CInstance, addr, buffer, amount, false);
