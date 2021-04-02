@@ -27,16 +27,41 @@ void tearDown(void) {
  *
  * */
 
-void test_saphBme280_initialises(void){
+saphBmeDevice_t helper_createBmeDevice(void){
+    uint8_t deviceAddr = 0xF7;
+    saphBmeDevice_t bmeDevice = {deviceAddr};
+    return bmeDevice;
+}
+
+void test_saphBme280_initialises(void) {
+    // Might add some more config settings to it
     uint8_t deviceAddr = 0xAB;
     saphBmeDevice_t bmeDevice = saphBme280_init(deviceAddr);
     TEST_ASSERT_EQUAL_UINT8(deviceAddr, bmeDevice.address);
 }
 
-void test_saphBme280_getId(void){
-    uint8_t deviceAddr = 0xAB;
-    saphBmeDevice_t bmeDevice = saphBme280_init(deviceAddr);
+void test_saphBme280_getId(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    uint8_t expectedDeviceId = 0x58; //according to the BME280 datasheet
+    uint8_t idRegisterAddr = 0xD0;
 
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 0);
+    uint8_t response = expectedDeviceId;
+    i2c_handler_read_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(&response, 1);
+
+    uint8_t actualId = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_UINT8(expectedDeviceId, actualId);
 }
 
+void test_saphBme280_resetTheDevice(void){
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    uint8_t resetRegisterAddr = 0xE0;
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &resetRegisterAddr, 1, 1, 0);
+}
 
+//void test_saphBme280_setSensorMode(void){
+//    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+//
+//
+//}

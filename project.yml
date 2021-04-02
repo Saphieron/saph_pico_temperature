@@ -59,6 +59,8 @@
   :plugins:
     - :ignore
     - :expect_any_args
+    - :return_thru_ptr
+    - :array
     - :callback
     - :return_thru_ptr
   :treat_as:
