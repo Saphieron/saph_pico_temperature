@@ -21,6 +21,9 @@ const uint LED_BLUE_0 = 18;
 void init_debug_leds(void);
 void integration_runAllTests(saphBmeDevice_t* device);
 void integration_getId(saphBmeDevice_t* device);
+void integration_resetDevice(saphBmeDevice_t* device);
+void integration_setMeasureControlReg(saphBmeDevice_t* device);
+void integration_setConfigReg(saphBmeDevice_t* device);
 
 int main() {
     stdio_init_all();
@@ -39,19 +42,65 @@ int main() {
 //    return 0;
 }
 
-void integration_runAllTests(saphBmeDevice_t* device){
+void integration_runAllTests(saphBmeDevice_t* device) {
 
     printf("##########SaphBme280 Integration tests##########\nRunning all tests:\n");
     integration_getId(device);
-    printf("test done\n\n");
+    integration_resetDevice(device);
+    integration_setMeasureControlReg(device);
+    integration_setConfigReg(device);
+    printf("################### test done ###################\n\n");
 }
 
-void integration_getId(saphBmeDevice_t* device){
-    uint8_t id = 0;
+void integration_getId(saphBmeDevice_t* device) {
+    int32_t id = 0;
+    printf("integration_getId: ");
     id = saphBme280_getId(device);
-    printf("Device id seems to be: 0x%02X\n", id);
+    if (id < 0) {
+        printf("failed\n");
+        printf("error code: %ld\n\n", id);
+    } else {
+        printf("successful\n");
+        printf("Device id seems to be: 0x%02X\n\n", (uint8_t) id);
+    }
 }
 
+void integration_resetDevice(saphBmeDevice_t* device) {
+    printf("integration_resetDevice: ");
+    int32_t errorCode = saphBme280_resetDevice(device);
+    if (errorCode == SAPH_BME280_NO_ERROR) {
+        printf("successful\n\n");
+    } else {
+        printf("failed\n");
+        printf("Error code: %ld\n\n", errorCode);
+    }
+}
+
+void integration_setMeasureControlReg(saphBmeDevice_t* device) {
+    printf("integration_setMeasureControlReg: ");
+    saphBme280_prepareMeasureControlReg(device, OVERSAMPLING_x16, OVERSAMPLING_x16, SAPHBME280_SENSOR_MODE_NORMAL);
+    int32_t errorCode = saphBme280_commitMeasureControlReg(device);
+    if (errorCode == SAPH_BME280_NO_ERROR) {
+        printf("successful\n\n");
+    } else {
+        printf("failed\n");
+        printf("Error code: %ld\n\n", errorCode);
+    }
+}
+
+void integration_setConfigReg(saphBmeDevice_t* device) {
+    printf("integration_setConfigReg: ");
+    saphBme280_prepareConfigurationReg(device, SAPHBME280_STANDBY_TIME_MS_0_5, SAPHBME280_IIR_FILTER_COEFFICIENT_16);
+    int32_t errorCode = saphBme280_commitConfigReg(device);
+    if (errorCode == SAPH_BME280_NO_ERROR) {
+        printf("successful\n\n");
+    } else {
+        printf("failed\n");
+        printf("Error code: %ld\n\n", errorCode);
+    }
+}
+
+// Helper functions
 void init_debug_leds(void) {
     // Preparing leds for later debugging
     gpio_init(LED_YELLOW_0);

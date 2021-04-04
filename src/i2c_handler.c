@@ -51,7 +51,6 @@ uint32_t i2c_handler_set_baudrate(uint32_t baudrate) {
 }
 
 int32_t i2c_handler_write(uint8_t addr, uint8_t* buffer, uint32_t amount) {
-    printf("handler called with 0x%02X, %p, %lu\n", addr, buffer, amount);
     return i2c_write_blocking(selectedI2CInstance, addr, buffer, amount, false);
 }
 
