@@ -2,6 +2,11 @@
 # This helps you later to specifically include it as CUTs
 # Replace/extend these as you see fit. 
 
+include(../../pico_sdk_import.cmake)
+project(saph_pico_temperature)
+
+# initialize the Raspberry Pi Pico SDK
+pico_sdk_init()
 
 add_executable(integration_saphBme280
         integration_saphBme280.c

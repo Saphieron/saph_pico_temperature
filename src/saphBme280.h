@@ -7,14 +7,15 @@
 
 typedef struct saphBmeDevice_t {
     uint8_t address;
+    uint8_t registerCtrlHumidity;
     uint8_t registerMeasureControl;
     uint8_t registerConfig;
+
 } saphBmeDevice_t;
 
 #define SAPH_BME280_NO_ERROR 0
 #define SAPH_BME280_COMM_ERROR_WRITE_AMOUNT -11
 #define SAPH_BME280_COMM_ERROR_READ_AMOUNT -12
-
 
 #define OVERSAMPLING_SKIP 0x00
 #define OVERSAMPLING_x1 0x01
@@ -54,9 +55,19 @@ saphBme280_prepareMeasureControlReg(saphBmeDevice_t* device, uint8_t tempOversam
 
 int32_t saphBme280_commitMeasureControlReg(saphBmeDevice_t* device);
 
-void saphBme280_prepareConfigurationReg(saphBmeDevice_t* device, uint8_t standbyTimeInNormalMode,
-                                        uint8_t iirFilterCoefficient);
+void saphBme280_prepareConfigurationReg(saphBmeDevice_t* device, uint8_t standbyTime, uint8_t iirFilterCoefficient);
 
 int32_t saphBme280_commitConfigReg(saphBmeDevice_t* device);
+
+void saphBme280_prepareCtrlHumidityReg(saphBmeDevice_t* device, uint8_t humidityOversampling);
+
+int32_t saphBme280_commitCtrlHumidity(saphBmeDevice_t* device);
+
+int32_t saphBme280_status(saphBmeDevice_t* device, uint8_t* buffer);
+
+int32_t
+saphBme280_getRawMeasurement(saphBmeDevice_t* device, uint32_t* pressure, uint32_t* temp, uint32_t* humidity);
+
+int32_t saphBme280_getPressure(saphBmeDevice_t* device, uint32_t* resultBuffer);
 
 #endif // SAPHBME280_H

@@ -10,7 +10,6 @@
 #include "i2c_handler.h"
 #include <stdio.h>
 
-
 static i2c_inst_t* selectedI2CInstance = i2c0;
 
 static bool isAddressReserved(uint8_t addr);
@@ -28,7 +27,6 @@ uint32_t i2c_handler_initialise(uint32_t baudrate) {
 void i2c_handler_disable(void) {
     i2c_deinit(selectedI2CInstance);
 }
-
 
 int32_t i2c_handler_selectHwInstance(uint8_t device_num) {
     int8_t result = 0;
@@ -55,9 +53,8 @@ int32_t i2c_handler_write(uint8_t addr, uint8_t* buffer, uint32_t amount) {
 }
 
 int32_t i2c_handler_read(uint8_t addr, uint8_t* buffer, uint32_t amount) {
-//    absolute_time_t currentTime = get_absolute_time();
-//    return i2c_read_blocking_until(selectedI2CInstance, addr, buffer, amount, false, currentTime + 10000);
-    return i2c_read_blocking(selectedI2CInstance, addr, buffer, amount, false);
+    int32_t result = i2c_read_blocking(selectedI2CInstance, addr, buffer, amount, false);
+    return result;
 }
 
 void i2c_handler_scanForDevices(void) {
