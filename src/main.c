@@ -10,7 +10,7 @@
 
 const uint LED_YELLOW_0 = 16;
 const uint LED_YELLOW_1 = 17;
-const uint LED_BLUE_0 = 18;
+const uint LED_YELLOW_2 = 18;
 
 void init_debug_leds(void);
 
@@ -27,7 +27,7 @@ int main() {
     bool current_val = 0;
     while (1) {
         i2c_handler_scanForDevices();
-        gpio_put(LED_BLUE_0, 1);
+        gpio_put(LED_YELLOW_2, 1);
         gpio_put(LED_PIN, current_val);
         current_val = !current_val;
         printf("another round\n");
@@ -39,11 +39,11 @@ void init_debug_leds(void) {
     // Preparing leds for later debugging
     gpio_init(LED_YELLOW_0);
     gpio_init(LED_YELLOW_1);
-    gpio_init(LED_BLUE_0);
+    gpio_init(LED_YELLOW_2);
     gpio_set_dir(LED_YELLOW_0, GPIO_OUT);
     gpio_set_dir(LED_YELLOW_1, GPIO_OUT);
-    gpio_set_dir(LED_BLUE_0, GPIO_OUT);
+    gpio_set_dir(LED_YELLOW_2, GPIO_OUT);
     gpio_put(LED_YELLOW_0, 0);
     gpio_put(LED_YELLOW_1, 0);
-    gpio_put(LED_BLUE_0, 0);
+    gpio_put(LED_YELLOW_2, 0);
 }

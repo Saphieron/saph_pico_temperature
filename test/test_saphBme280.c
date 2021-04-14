@@ -11,21 +11,24 @@ void tearDown(void) {
 }
 
 /* *
- * TODO: read out the calibration values for the raw values processing
+ * TODO: make the register ctrl naming consistent
  * */
 
 #define NO_ERROR 0
-#define ERROR_PLATFORM_GENERIC -2
+
 //#define COMM_ERROR_READ_AMOUNT -12
 
 #define LOWEST_THREE_BITS 7
-#define LOWEST_TWO_BITS 3
 
-saphBmeDevice_t helper_createBmeDevice(void) {
+static saphBmeDevice_t helper_createBmeDevice(void) {
     uint8_t deviceAddr = 0xF7;
     saphBmeDevice_t bmeDevice = {deviceAddr};
     return bmeDevice;
 }
+
+// #############################################
+// # Test group _init
+// #############################################
 
 void test_saphBme280_initialises(void) {
     // Might add some more config settings to it
@@ -52,9 +55,11 @@ void test_saphBme280_getId(void) {
     TEST_ASSERT_EQUAL_INT16(expectedDeviceId, actualId);
 }
 
+#define WRITE_ERROR -11
+
 void test_saphBme280_getId_returnsErrorOnFailedWriteAmount(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    int32_t expectedError = SAPH_BME280_COMM_ERROR_WRITE_AMOUNT;
+    int32_t expectedError = WRITE_ERROR;
     uint8_t idRegisterAddr = 0xD0;
 
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 0);
@@ -62,23 +67,27 @@ void test_saphBme280_getId_returnsErrorOnFailedWriteAmount(void) {
     TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
 }
 
+#define READ_ERROR -12
+
+void test_saphBme280_getId_returnsErrorOnFailedReadAmount(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int32_t expectedError = READ_ERROR;
+    uint8_t idRegisterAddr = 0xD0;
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(0);
+    int32_t errorCode = saphBme280_getId(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
+}
+
+#define ERROR_PLATFORM_GENERIC -2
+
 void test_saphBme280_getId_returnsI2cErrorCodeIfGenericHardwareErrorOnWrite(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     int32_t expectedError = ERROR_PLATFORM_GENERIC; // Supposedly the generic error code for the pico
     uint8_t idRegisterAddr = 0xD0;
 
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, expectedError);
-    int32_t errorCode = saphBme280_getId(&fakeDevice);
-    TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
-}
-
-void test_saphBme280_getId_returnsErrorOnFailedReadAmount(void) {
-    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    int32_t expectedError = SAPH_BME280_COMM_ERROR_READ_AMOUNT;
-    uint8_t idRegisterAddr = 0xD0;
-
-    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
-    i2c_handler_read_ExpectAnyArgsAndReturn(0);
     int32_t errorCode = saphBme280_getId(&fakeDevice);
     TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
 }
@@ -111,7 +120,7 @@ void test_saphBme280_reset_deviceIsReset(void) {
 
 void test_saphBme280_reset_returnsErrorOnFailedWriteAmount(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    int32_t expectedError = SAPH_BME280_COMM_ERROR_WRITE_AMOUNT;
+    int32_t expectedError = WRITE_ERROR;
     i2c_handler_write_ExpectAnyArgsAndReturn(0);
     int32_t errorCode = saphBme280_resetDevice(&fakeDevice);
     TEST_ASSERT_EQUAL_INT32(expectedError, errorCode);
@@ -129,10 +138,28 @@ void test_saphBme280_reset_returnsI2cErrorCodeIfGenericHardwareErrorOnWrite(void
 // # Test group _prepareMeasureControlReg
 // #############################################
 
+#define TEST_OVERSAMPLING_SKIP 0x00
+#define TEST_OVERSAMPLING_x1 0x01
+#define TEST_OVERSAMPLING_x2 0x02
+#define TEST_OVERSAMPLING_x4 0x03
+#define TEST_OVERSAMPLING_x8 0x04
+#define TEST_OVERSAMPLING_x16 0x05
+
+void test_saphBme280_prepareMeasureControlReg_confirmOversamplingRates(void) {
+    uint8_t allOversamplingValues[] = {OVERSAMPLING_SKIP, OVERSAMPLING_x1, OVERSAMPLING_x2, OVERSAMPLING_x4,
+                                       OVERSAMPLING_x8, OVERSAMPLING_x16};
+    uint8_t validationValues[] = {TEST_OVERSAMPLING_SKIP, TEST_OVERSAMPLING_x1, TEST_OVERSAMPLING_x2,
+                                  TEST_OVERSAMPLING_x4, TEST_OVERSAMPLING_x8, TEST_OVERSAMPLING_x16};
+
+    for (int i = 0; i < 6; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(validationValues[i], allOversamplingValues[i]);
+    }
+}
+
 //Store a configuration to send over
 void test_saphBme280_prepareMeasureControlReg_storesSettingsForLater(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    uint8_t oversampling_x1 = OVERSAMPLING_x1; // from saphBme280.h
+    uint8_t oversampling_x1 = TEST_OVERSAMPLING_x1; // from saphBme280.h
     uint8_t tempOversampling = oversampling_x1;
     uint8_t pressureOversampling = oversampling_x1;
     uint8_t deviceModeNormal = 3;
@@ -143,6 +170,10 @@ void test_saphBme280_prepareMeasureControlReg_storesSettingsForLater(void) {
     TEST_ASSERT_EQUAL_UINT8(expectedUncommitedRegisterContent, fakeDevice.registerMeasureControl);
 }
 
+#define SENSOR_MODE_SLEEP 0
+#define SENSOR_MODE_FORCED 2
+#define SENSOR_MODE_NORMAL 3
+
 void test_saphBme280_prepareMeasureControlReg_checkAllOversamplingModes(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t amountSamplingOptions = 6;
@@ -150,9 +181,9 @@ void test_saphBme280_prepareMeasureControlReg_checkAllOversamplingModes(void) {
                                        OVERSAMPLING_x8, OVERSAMPLING_x16};
     for (uint8_t i = 0; i < amountSamplingOptions; ++i) {
         uint8_t expectedUncommitedRegisterContent =
-                allOversamplingValues[i] << 5 | allOversamplingValues[i] << 2 | SAPHBME280_SENSOR_MODE_NORMAL;
+                allOversamplingValues[i] << 5 | allOversamplingValues[i] << 2 | SENSOR_MODE_NORMAL;
         saphBme280_prepareMeasureControlReg(&fakeDevice, allOversamplingValues[i], allOversamplingValues[i],
-                                            SAPHBME280_SENSOR_MODE_NORMAL);
+                                            SENSOR_MODE_NORMAL);
         TEST_ASSERT_EQUAL_UINT8(expectedUncommitedRegisterContent, fakeDevice.registerMeasureControl);
     }
 
@@ -162,8 +193,11 @@ void test_saphBme280_prepareMeasureControlReg_checkAllSensorModes(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t allSensorModes[] = {SAPHBME280_SENSOR_MODE_SLEEP, SAPHBME280_SENSOR_MODE_FORCED,
                                 SAPHBME280_SENSOR_MODE_NORMAL};
+    uint8_t validationValues[] = {SENSOR_MODE_SLEEP, SENSOR_MODE_FORCED,
+                                  SENSOR_MODE_NORMAL};
     uint8_t amountSensorModes = 3;
     for (int i = 0; i < amountSensorModes; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(validationValues[i], allSensorModes[i]);
         uint8_t expectedUncommitedRegisterContent =
                 OVERSAMPLING_x16 << 5 | OVERSAMPLING_x16 << 2 | allSensorModes[i];
         saphBme280_prepareMeasureControlReg(&fakeDevice, OVERSAMPLING_x16, OVERSAMPLING_x16,
@@ -217,7 +251,7 @@ void test_saphBme280_commitMeasureControlRegister_sendsStoredRegisterValue(void)
 
 void test_saphBme280_commitMeasureControlRegister_returnsErrorOnWrongAmountWritten(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    int32_t expectedError = SAPH_BME280_COMM_ERROR_WRITE_AMOUNT;
+    int32_t expectedError = WRITE_ERROR;
     int32_t differingReturnValue = 1;
     i2c_handler_write_ExpectAnyArgsAndReturn(differingReturnValue);
 
@@ -239,9 +273,46 @@ void test_saphBme280_commitMeasureControlRegister_returnsI2cErrorCodeIfGenericHa
 // # Test group _prepareConfigReg
 // #############################################
 
+#define STANDBY_TIME_MS_0_5 0x00
+#define STANDBY_TIME_MS_62_5 0x01
+#define STANDBY_TIME_MS_125_0 0x02
+#define STANDBY_TIME_MS_250_0 0x03
+#define STANDBY_TIME_MS_500_0 0x04
+#define STANDBY_TIME_MS_1000_0 0x05
+#define STANDBY_TIME_MS_10_0 0x06
+#define STANDBY_TIME_MS_20_0 0x07
+
+#define IIR_FILTER_COEFFICIENT_OFF 0x00
+#define IIR_FILTER_COEFFICIENT_2 0x01
+#define IIR_FILTER_COEFFICIENT_4 0x02
+#define IIR_FILTER_COEFFICIENT_8 0x03
+#define IIR_FILTER_COEFFICIENT_16 0x04
+
+void test_saphBme280_prepareConfigReg_confirmStandbyAndIirFilterValues(void) {
+    uint8_t allStandbyTimes[] = {SAPHBME280_STANDBY_TIME_MS_0_5, SAPHBME280_STANDBY_TIME_MS_62_5,
+                                 SAPHBME280_STANDBY_TIME_MS_125_0, SAPHBME280_STANDBY_TIME_MS_250_0,
+                                 SAPHBME280_STANDBY_TIME_MS_500_0, SAPHBME280_STANDBY_TIME_MS_1000_0,
+                                 SAPHBME280_STANDBY_TIME_MS_10_0, SAPHBME280_STANDBY_TIME_MS_20_0};
+    uint8_t validationValuesStandbyTimes[] = {STANDBY_TIME_MS_0_5, STANDBY_TIME_MS_62_5, STANDBY_TIME_MS_125_0,
+                                              STANDBY_TIME_MS_250_0, STANDBY_TIME_MS_500_0, STANDBY_TIME_MS_1000_0,
+                                              STANDBY_TIME_MS_10_0, STANDBY_TIME_MS_20_0};
+    for (int i = 0; i < 8; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(validationValuesStandbyTimes[i], allStandbyTimes[i]);
+    }
+    uint8_t allIirCoefficients[] = {SAPHBME280_IIR_FILTER_COEFFICIENT_OFF, SAPHBME280_IIR_FILTER_COEFFICIENT_2,
+                                    SAPHBME280_IIR_FILTER_COEFFICIENT_4, SAPHBME280_IIR_FILTER_COEFFICIENT_8,
+                                    SAPHBME280_IIR_FILTER_COEFFICIENT_16};
+    uint8_t validationValuesIirCoefficients[] = {IIR_FILTER_COEFFICIENT_OFF, IIR_FILTER_COEFFICIENT_2,
+                                                 IIR_FILTER_COEFFICIENT_4, IIR_FILTER_COEFFICIENT_8,
+                                                 IIR_FILTER_COEFFICIENT_16};
+    for (int j = 0; j < 5; ++j) {
+        TEST_ASSERT_EQUAL_UINT8(validationValuesIirCoefficients[j], allIirCoefficients[j]);
+    }
+}
+
 void test_saphBme280_prepareConfigReg_definesStandbyPeriodAndIirFilter(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    uint8_t standbyTime = SAPHBME280_STANDBY_TIME_MS_1000_0;
+    uint8_t standbyTime = STANDBY_TIME_MS_1000_0;
     uint8_t iirFilterCoefficient = SAPHBME280_IIR_FILTER_COEFFICIENT_8;
     saphBme280_prepareConfigurationReg(&fakeDevice, standbyTime, iirFilterCoefficient);
 
@@ -309,7 +380,7 @@ void test_saphBme280_commitConfigRegister_sendsStoredRegisterValue(void) {
 
 void test_saphBme280_commitConfigRegister_returnsErrorOnWrongAmountWritten(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    int32_t expectedError = SAPH_BME280_COMM_ERROR_WRITE_AMOUNT;
+    int32_t expectedError = WRITE_ERROR;
     uint8_t differingReturnValue = 1;
     i2c_handler_write_ExpectAnyArgsAndReturn(differingReturnValue);
     int32_t errorCode = saphBme280_commitConfigReg(&fakeDevice);
@@ -332,7 +403,7 @@ void test_saphBme280_commitConfigRegister_returnsI2cErrorCodeIfGenericHardwareEr
 void test_saphBme280_prepareCtrlHumidity_storesSettingsForLater(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
 
-    uint8_t humidityOversampling = OVERSAMPLING_x1;
+    uint8_t humidityOversampling = TEST_OVERSAMPLING_x1;
     uint8_t expectedUncommitedRegisterContent = humidityOversampling;
 
     saphBme280_prepareCtrlHumidityReg(&fakeDevice, humidityOversampling);
@@ -342,7 +413,7 @@ void test_saphBme280_prepareCtrlHumidity_storesSettingsForLater(void) {
 void test_saphBme280_prepareCtrlHumidity_masksUnrelatedBitsInArgument(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
 
-    uint8_t humidityOversampling = 0xF8 | OVERSAMPLING_x4;
+    uint8_t humidityOversampling = 0xF8 | TEST_OVERSAMPLING_x4;
     uint8_t expectedUncommitedRegisterContent = humidityOversampling & LOWEST_THREE_BITS;
 
     saphBme280_prepareCtrlHumidityReg(&fakeDevice, humidityOversampling);
@@ -355,7 +426,7 @@ void test_saphBme280_prepareCtrlHumidity_masksUnrelatedBitsInArgument(void) {
 
 void test_saphBme280_commitCtrlHumidity_sendsStoredRegisterValue(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    saphBme280_prepareCtrlHumidityReg(&fakeDevice, OVERSAMPLING_x8);
+    saphBme280_prepareCtrlHumidityReg(&fakeDevice, TEST_OVERSAMPLING_x8);
 
     uint8_t configRegisterAddr = 0xF2;
     uint8_t expectedUncommitedRegisterContent = fakeDevice.registerCtrlHumidity;
@@ -364,7 +435,7 @@ void test_saphBme280_commitCtrlHumidity_sendsStoredRegisterValue(void) {
                                                2);
 
     int32_t errorCode = saphBme280_commitCtrlHumidity(&fakeDevice);
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_NO_ERROR, errorCode);
+    TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
 }
 
 void test_saphBme280_commitCtrlHumidity_returnsErrorOnWrongAmountWritten(void) {
@@ -372,7 +443,7 @@ void test_saphBme280_commitCtrlHumidity_returnsErrorOnWrongAmountWritten(void) {
     uint8_t differingReturnValue = 1;
     i2c_handler_write_ExpectAnyArgsAndReturn(differingReturnValue);
     int32_t errorCode = saphBme280_commitCtrlHumidity(&fakeDevice);
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_COMM_ERROR_WRITE_AMOUNT, errorCode);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, errorCode);
 }
 
 void test_saphBme280_commitCtrlHumidity_returnsI2cErrorCodeIfGenericHardwareErrorOnWrite(void) {
@@ -411,7 +482,7 @@ void test_saphBme280_getstatus_returnsErrorOnWrongAmountWritten(void) {
     uint8_t untouchedBuffer = 0xFF;
     int32_t errorCode = saphBme280_status(&fakeDevice, &untouchedBuffer);
 
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_COMM_ERROR_WRITE_AMOUNT, errorCode);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, errorCode);
     TEST_ASSERT_EQUAL_UINT8(0xFF, untouchedBuffer);
 }
 
@@ -423,7 +494,7 @@ void test_saphBme280_getstatus_returnsErrorOnWrongAmountRead(void) {
     uint8_t untouchedBuffer = 0xFF;
     int32_t errorCode = saphBme280_status(&fakeDevice, &untouchedBuffer);
 
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_COMM_ERROR_READ_AMOUNT, errorCode);
+    TEST_ASSERT_EQUAL_INT32(READ_ERROR, errorCode);
     TEST_ASSERT_EQUAL_UINT8(0xFF, untouchedBuffer);
 }
 
@@ -431,71 +502,74 @@ void test_saphBme280_getstatus_returnsErrorOnWrongAmountRead(void) {
 // # Test group _getAllMeasurements
 // #############################################
 
-void test_saphBme280_getRawAllMeasurements_returnsPressureInItsPointers(void) {
+#define MEASUREMENT_SIZE 8
+
+void test_saphBme280_getRawAllMeasurements_returnsPressureThroughStruct(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
     uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCC, 0xCB, 0xCA};
     uint32_t expectedPressure = (response[0] << 11) + (response[1] << 3) + (LOWEST_THREE_BITS & response[2]);
 
-    uint32_t pressure = 0;
-    uint32_t doesntMatter = 0;
+    saphBmeMeasurements_t result;
+    result.pressure = 0;
 
-    i2c_handler_read_ExpectAnyArgsAndReturn(9);
-    i2c_handler_read_ReturnArrayThruPtr_buffer(response, 9);
-    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &pressure, &doesntMatter, &doesntMatter);
+    i2c_handler_read_ExpectAnyArgsAndReturn(MEASUREMENT_SIZE);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
+    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
-    TEST_ASSERT_EQUAL_UINT32(expectedPressure, pressure);
+    TEST_ASSERT_EQUAL_UINT32(expectedPressure, result.pressure);
 }
 
-void test_saphBme280_getRawAllMeasurements_returnsTemperatureInItsPointers(void) {
+void test_saphBme280_getRawAllMeasurements_returnsTemperatureThroughStruct(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
-    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCC, 0xCB, 0xCA};
+    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCB, 0xCA};
     uint32_t expectedTemp = (response[3] << 11) + (response[4] << 3) + (LOWEST_THREE_BITS & response[5]);
-    uint32_t doesntMatter = 0xFF;
-    uint32_t temp = 0;
+    saphBmeMeasurements_t result;
+    result.temperature = 0;
 
-    i2c_handler_read_ExpectAnyArgsAndReturn(9);
-    i2c_handler_read_ReturnArrayThruPtr_buffer(response, 9);
-    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &doesntMatter, &temp, &doesntMatter);
+    i2c_handler_read_ExpectAnyArgsAndReturn(MEASUREMENT_SIZE);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
+    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
 
-    TEST_ASSERT_EQUAL_UINT32(expectedTemp, temp);
+    TEST_ASSERT_EQUAL_UINT32(expectedTemp, result.temperature);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsHumidityInItsPointers(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
+    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCB, 0xCA};
+    uint32_t expectedHumidity = (response[6] << 8) + (response[7]);
+    saphBmeMeasurements_t result;
+    result.humidity = 0;
+
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
-    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCC, 0xCB, 0xCA};
-    uint32_t expectedHumidity = (response[6] << 11) + (response[7] << 3) + (LOWEST_THREE_BITS & response[8]);
-
-    uint32_t doesntMatter = 0xFF;
-    uint32_t humidity = 0;
-
-    i2c_handler_read_ExpectAnyArgsAndReturn(9);
-    i2c_handler_read_ReturnArrayThruPtr_buffer(response, 9);
-    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &doesntMatter, &doesntMatter, &humidity);
+    i2c_handler_read_ExpectAnyArgsAndReturn(MEASUREMENT_SIZE);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
+    int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
 
-    TEST_ASSERT_EQUAL_UINT32(expectedHumidity, humidity);
+    TEST_ASSERT_EQUAL_UINT32(expectedHumidity, result.humidity);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedWrite(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    void* nothingness = 0;
     i2c_handler_write_ExpectAnyArgsAndReturn(0);
-    int32_t result = saphBme280_getRawMeasurement(&fakeDevice, 0, 0, 0);
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_COMM_ERROR_WRITE_AMOUNT, result);
+    int32_t result = saphBme280_getRawMeasurement(&fakeDevice, nothingness);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, result);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedRead(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    void* nothingness = 0;
     i2c_handler_write_ExpectAnyArgsAndReturn(1);
     i2c_handler_read_ExpectAnyArgsAndReturn(1);
-    int32_t result = saphBme280_getRawMeasurement(&fakeDevice, 0, 0, 0);
-    TEST_ASSERT_EQUAL_INT32(SAPH_BME280_COMM_ERROR_READ_AMOUNT, result);
+    int32_t result = saphBme280_getRawMeasurement(&fakeDevice, nothingness);
+    TEST_ASSERT_EQUAL_INT32(READ_ERROR, result);
 }
 
 // #############################################
@@ -504,7 +578,6 @@ void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedRead(void) {
 
 
 //void test_saphBme280_getPressure(void) {
-//    TEST_FAIL_MESSAGE("I READ THE PRESSURE BIT MASK PART FOR THE LAST THREE BITS WRONG");
 //    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
 //    uint8_t pressureRegAddress = 0xF7;
 //    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &pressureRegAddress, 1, 1, 1);
@@ -519,13 +592,177 @@ void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedRead(void) {
 //    TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
 //}
 
-
 // #############################################
-// # Test group updatePrepareOversampling
-// #    for later convenience purposes
+// # Test group _readTrimmingValues
 // #############################################
 
-//void test_saphBme280_updatePrepareOversampling_changes(void) {
-//    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-//
-//}
+#define firstBurstReadAmount 25
+#define secondBurstReadAmount 1
+#define thirdBurstReadAmount 6
+uint8_t trimmingFirstResponse[firstBurstReadAmount];
+uint8_t trimmingSecondResponse[secondBurstReadAmount];
+uint8_t trimmingThirdResponse[thirdBurstReadAmount];
+
+#define BURST_ADDR_FIRST 0x88
+
+static void helper_prepareI2cBurstRead(saphBmeDevice_t* fakeDevice) {
+    uint8_t firstStartAddr = BURST_ADDR_FIRST;
+    uint8_t secondStartAddr = 0xA1;
+    uint8_t thirdStartAddr = 0xE1;
+    for (int i = 0; i < firstBurstReadAmount; ++i) {
+        trimmingFirstResponse[i] = i;
+    }
+
+    for (int i = 0; i < secondBurstReadAmount; ++i) {
+        trimmingSecondResponse[i] = 0xBB + i;
+    }
+
+    for (int i = 0; i < thirdBurstReadAmount; ++i) {
+        trimmingThirdResponse[i] = 0xCC + i;
+    }
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice->address, &firstStartAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(firstBurstReadAmount);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(trimmingFirstResponse, firstBurstReadAmount);
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice->address, &secondStartAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(secondBurstReadAmount);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(trimmingSecondResponse, secondBurstReadAmount);
+
+    i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice->address, &thirdStartAddr, 1, 1, 1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(thirdBurstReadAmount);
+    i2c_handler_read_ReturnArrayThruPtr_buffer(trimmingThirdResponse, thirdBurstReadAmount);
+}
+
+static void
+helper_checkUnsignedTrimmingValue(const uint8_t* expectedValue, const uint16_t* actual) {
+    uint16_t expectedResult = (expectedValue[1] << 8) + expectedValue[0];
+    TEST_ASSERT_EQUAL_UINT16(expectedResult, *actual);
+}
+
+static void
+helper_checkSignedTrimmingValue(const uint8_t* expectedValue, const int16_t* actual) {
+    uint16_t expectedDigT1 = (expectedValue[1] << 8) + expectedValue[0];
+    TEST_ASSERT_EQUAL_UINT16(expectedDigT1, *actual);
+}
+
+void test_saphBme280_readTrimmingValues_burstReadInThreeSteps(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    helper_prepareI2cBurstRead(&fakeDevice);
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_checkTemperatureTrimmingValues(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    helper_prepareI2cBurstRead(&fakeDevice);
+    saphBme280_readTrimmingValues(&fakeDevice);
+    saphBmeTrimmingValues_t trimmingValues = fakeDevice.trimmingValues;
+    helper_checkUnsignedTrimmingValue(trimmingFirstResponse, &(trimmingValues.dig_T1));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 2, &(trimmingValues.dig_T2));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 4, &(trimmingValues.dig_T3));
+}
+
+void test_saphBme280_readTrimmingValues_checkPressureTrimmingValues(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    helper_prepareI2cBurstRead(&fakeDevice);
+    saphBme280_readTrimmingValues(&fakeDevice);
+    saphBmeTrimmingValues_t trimmingValues = fakeDevice.trimmingValues;
+
+    // Yes i'm aware this isn't sexy, but it is expressive about what and where each value is.
+    helper_checkUnsignedTrimmingValue(trimmingFirstResponse + 6, &(trimmingValues.dig_P1));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 8, &(trimmingValues.dig_P2));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 10, &(trimmingValues.dig_P3));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 12, &(trimmingValues.dig_P4));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 14, &(trimmingValues.dig_P5));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 16, &(trimmingValues.dig_P6));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 18, &(trimmingValues.dig_P7));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 20, &(trimmingValues.dig_P8));
+    helper_checkSignedTrimmingValue(trimmingFirstResponse + 22, &(trimmingValues.dig_P9));
+}
+
+#define LOWER_FOUR_BITS 0x0F
+
+void test_saphBme280_readTrimmingValues_checkHumidityTrimmingValues(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    helper_prepareI2cBurstRead(&fakeDevice);
+    saphBme280_readTrimmingValues(&fakeDevice);
+
+    saphBmeTrimmingValues_t trimmingValues = fakeDevice.trimmingValues;
+    TEST_ASSERT_EQUAL_UINT8(trimmingSecondResponse[0], trimmingValues.dig_H1);
+
+    int16_t expectedH2 = (trimmingThirdResponse[1] << 8) + trimmingThirdResponse[0];
+    TEST_ASSERT_EQUAL_INT16(expectedH2, trimmingValues.dig_H2);
+
+    TEST_ASSERT_EQUAL_UINT8(trimmingThirdResponse[2], trimmingValues.dig_H3);
+
+    int16_t expectedH4 = (trimmingThirdResponse[3] << 4) + (trimmingThirdResponse[4] & LOWER_FOUR_BITS);
+    TEST_ASSERT_EQUAL_INT16(expectedH4, trimmingValues.dig_H4);
+
+    int16_t expectedH5 = (trimmingThirdResponse[5] << 4) + (trimmingThirdResponse[4] >> 4);
+    TEST_ASSERT_EQUAL_INT16(expectedH5, trimmingValues.dig_H5);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedFirstWrite(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    int32_t wrongWriteAmount = 0;
+    i2c_handler_write_ExpectAnyArgsAndReturn(wrongWriteAmount);
+
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedFirstRead(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    int32_t wrongReadAmount = 0;
+    i2c_handler_read_ExpectAnyArgsAndReturn(wrongReadAmount);
+
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(READ_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedSecondWrite(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(25);
+    int32_t wrongWriteAmount = 0;
+    i2c_handler_write_ExpectAnyArgsAndReturn(wrongWriteAmount);
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedSecondRead(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(25);
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    int32_t wrongReadAmount = 0;
+    i2c_handler_read_ExpectAnyArgsAndReturn(wrongReadAmount);
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(READ_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedThirdWrite(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(25);
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(1);
+    int32_t wrongWriteAmount = 0;
+    i2c_handler_write_ExpectAnyArgsAndReturn(wrongWriteAmount);
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(WRITE_ERROR, errorCode);
+}
+
+void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedThirdRead(void) {
+    saphBmeDevice_t fakeDevice = helper_createBmeDevice();
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(25);
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    i2c_handler_read_ExpectAnyArgsAndReturn(1);
+    i2c_handler_write_ExpectAnyArgsAndReturn(1);
+    int32_t wrongReadAmount = 0;
+    i2c_handler_read_ExpectAnyArgsAndReturn(wrongReadAmount);
+    int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
+    TEST_ASSERT_EQUAL_INT32(READ_ERROR, errorCode);
+}

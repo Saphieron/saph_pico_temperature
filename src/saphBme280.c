@@ -16,20 +16,33 @@
 #define REG_RESET_VALUE 0xB6
 #define STANDBY_TIME_POS 5
 #define IIR_FILTER_COEFFICIENT_POS 2
-#define MEASUREMENT_DATA_AMOUNT 9
+#define MEASUREMENT_DATA_AMOUNT 8
 
 // Local helpers to avoid magic numbers
-#define BITMASK_LOWEST_THREE 7
-#define BITMASK_LOWEST_TWO 3
+#define BITMASK_LOWEST_FOUR 0x0F
+#define BITMASK_LOWEST_THREE 0x07
+#define BITMASK_LOWEST_TWO 0x03
+
 #define TEMP_OVERSAMPLING_POS 5
 #define PRESSURE_OVERSAMPLING_POS 2
 
 // Helper function declarations
 static int32_t getErrorCode(int32_t commResult, bool wasWriting);
+
 static int32_t writeRegisterValueToDevice(saphBmeDevice_t* device, uint8_t* buffer, uint32_t bufferSize);
+
 static int32_t
-readRegisterValueFromDevice(saphBmeDevice_t* device, uint8_t regAddress, uint8_t* readingBuffer, uint32_t readAmount);
-static uint32_t getMeasurementFromBuffer(const uint8_t* buffer);
+readRegisterFromDevice(saphBmeDevice_t* device, uint8_t regAddress, uint8_t* readingBuffer, uint32_t readAmount);
+
+static uint32_t getMeasurement20BitFromBuffer(const uint8_t* buffer);
+
+static uint32_t getMeasurement16itFromBuffer(const uint8_t* buffer);
+
+static int32_t readTrimmingValues(saphBmeDevice_t* device, uint8_t* buffer);
+
+static inline void setTemperatureTrimmingValues(saphBmeDevice_t* device, const uint8_t* buffer);
+
+static inline void setPressureTrimmingValues(saphBmeDevice_t* device, const uint8_t* buffer);
 
 saphBmeDevice_t saphBme280_init(uint8_t address) {
     saphBmeDevice_t newDevice;
@@ -93,43 +106,108 @@ void saphBme280_prepareCtrlHumidityReg(saphBmeDevice_t* device, uint8_t humidity
 
 int32_t saphBme280_commitCtrlHumidity(saphBmeDevice_t* device) {
     uint8_t buffer[] = {REG_HUMIDITY_CTRL_ADDR, device->registerCtrlHumidity};
-    return writeRegisterValueToDevice(device,buffer, 2);
+    return writeRegisterValueToDevice(device, buffer, 2);
 }
 
 int32_t saphBme280_status(saphBmeDevice_t* device, uint8_t* buffer) {
-    return readRegisterValueFromDevice(device, REG_STATUS_ADDR, buffer, 1);
+    return readRegisterFromDevice(device, REG_STATUS_ADDR, buffer, 1);
 }
 
 int32_t
-saphBme280_getRawMeasurement(saphBmeDevice_t* device, uint32_t* pressure, uint32_t* temp, uint32_t* humidity) {
+saphBme280_getRawMeasurement(saphBmeDevice_t* device, saphBmeMeasurements_t* result) {
     uint8_t receiveBuffer[MEASUREMENT_DATA_AMOUNT];
-    int32_t commResult = readRegisterValueFromDevice(device, REG_PRESSURE_START_ADDR, (uint8_t*) receiveBuffer,
-                                                     MEASUREMENT_DATA_AMOUNT);
+    int32_t commResult = readRegisterFromDevice(device, REG_PRESSURE_START_ADDR, (uint8_t*) receiveBuffer,
+                                                MEASUREMENT_DATA_AMOUNT);
     if (commResult != SAPH_BME280_NO_ERROR) {
         return commResult;
     }
-    *pressure = getMeasurementFromBuffer(receiveBuffer);
-    *temp = getMeasurementFromBuffer(receiveBuffer + 3);
-    *humidity = getMeasurementFromBuffer(receiveBuffer + 6);
+
+    result->pressure = getMeasurement20BitFromBuffer(receiveBuffer);
+    result->temperature = getMeasurement20BitFromBuffer(receiveBuffer + 3);
+    result->humidity = getMeasurement16itFromBuffer(receiveBuffer + 6);
     return SAPH_BME280_NO_ERROR;
 }
 
 int32_t saphBme280_getPressure(saphBmeDevice_t* device, uint32_t* resultBuffer) {
     uint32_t readAmount = 3;
-    int32_t commResult = readRegisterValueFromDevice(device, REG_PRESSURE_START_ADDR, (uint8_t*) resultBuffer,
-                                                     readAmount);
+    int32_t commResult = readRegisterFromDevice(device, REG_PRESSURE_START_ADDR, (uint8_t*) resultBuffer, readAmount);
     if (commResult != SAPH_BME280_NO_ERROR) {
         return commResult;
     }
+    *resultBuffer = getMeasurement20BitFromBuffer((uint8_t*) resultBuffer);
+    return SAPH_BME280_NO_ERROR;
+}
 
-    uint8_t* helper = (uint8_t*) resultBuffer;
-    uint32_t pressureFixed = helper[0] << 12 | helper[1] << 4 | (helper[2] & BITMASK_LOWEST_THREE);
-    *resultBuffer = pressureFixed;
+int32_t saphBme280_readTrimmingValues(saphBmeDevice_t* device) {
+
+    uint8_t buffer[25 + 1 + 6];
+    int32_t errorCode = readTrimmingValues(device, buffer);
+    if(errorCode != SAPH_BME280_NO_ERROR){
+        return errorCode;
+    }
+    setTemperatureTrimmingValues(device, buffer);
+    setPressureTrimmingValues(device, buffer);
+
+    device->trimmingValues.dig_H1 = buffer[25];
+    device->trimmingValues.dig_H2 = (buffer[27] << 8) + buffer[26];
+    device->trimmingValues.dig_H3 = buffer[28];
+    device->trimmingValues.dig_H4 = (buffer[29] << 4) + (buffer[30] & BITMASK_LOWEST_FOUR);
+    device->trimmingValues.dig_H5 = (buffer[31] << 4) + (buffer[30] >> 4);
+
     return SAPH_BME280_NO_ERROR;
 }
 
 // ###############################################
 // Helper Functions
+// ###############################################
+
+static int32_t readTrimmingValues(saphBmeDevice_t* device, uint8_t* buffer) {
+    uint8_t startingAddressFirst = 0x88;
+    uint8_t startingAddressSecond = 0xA1;
+    uint8_t startingAddressThird = 0xE1;
+    int32_t errorCode = readRegisterFromDevice(device, startingAddressFirst, buffer, 25);
+    if (errorCode != SAPH_BME280_NO_ERROR) {
+        return errorCode;
+    }
+
+    errorCode = readRegisterFromDevice(device, startingAddressSecond, buffer + 25, 1);
+    if (errorCode != SAPH_BME280_NO_ERROR) {
+        return errorCode;
+    }
+    errorCode = readRegisterFromDevice(device, startingAddressThird, buffer + 25 + 1, 6);
+    return errorCode;
+}
+
+static inline void setTemperatureTrimmingValues(saphBmeDevice_t* device, const uint8_t* buffer) {
+    uint8_t i = 0;
+    device->trimmingValues.dig_T1 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_T2 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_T3 = (buffer[i + 1] << 8) + buffer[i];
+}
+
+static inline void setPressureTrimmingValues(saphBmeDevice_t* device, const uint8_t* buffer) {
+    uint8_t i = 6;
+    device->trimmingValues.dig_P1 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P2 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P3 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P4 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P5 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P6 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P7 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P8 = (buffer[i + 1] << 8) + buffer[i];
+    i += 2;
+    device->trimmingValues.dig_P9 = (buffer[i + 1] << 8) + buffer[i];
+}
+
 static int32_t getErrorCode(int32_t commResult, bool wasWriting) {
     if (wasWriting) {
         if (commResult >= 0) {
@@ -155,7 +233,7 @@ static int32_t writeRegisterValueToDevice(saphBmeDevice_t* device, uint8_t* buff
 }
 
 static int32_t
-readRegisterValueFromDevice(saphBmeDevice_t* device, uint8_t regAddress, uint8_t* readingBuffer, uint32_t readAmount) {
+readRegisterFromDevice(saphBmeDevice_t* device, uint8_t regAddress, uint8_t* readingBuffer, uint32_t readAmount) {
     int32_t commResult = 0;
     if ((commResult = writeRegisterValueToDevice(device, &regAddress, 1)) != SAPH_BME280_NO_ERROR) {
         return commResult;
@@ -169,6 +247,10 @@ readRegisterValueFromDevice(saphBmeDevice_t* device, uint8_t regAddress, uint8_t
     return SAPH_BME280_NO_ERROR;
 }
 
-static uint32_t getMeasurementFromBuffer(const uint8_t* buffer) {
+static uint32_t getMeasurement20BitFromBuffer(const uint8_t* buffer) {
     return (buffer[0] << 11) + (buffer[1] << 3) + (buffer[2] & BITMASK_LOWEST_THREE);
+}
+
+static uint32_t getMeasurement16itFromBuffer(const uint8_t* buffer) {
+    return (buffer[0] << 8) + (buffer[1]);
 }

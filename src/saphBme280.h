@@ -4,14 +4,42 @@
 #define SAPHBME280_H
 
 #include <stdint.h>
+typedef struct saphBmeTrimmingValues_t {
+    uint16_t dig_T1;
+    int16_t dig_T2;
+    int16_t dig_T3;
+    uint16_t dig_P1;
+    int16_t dig_P2;
+    int16_t dig_P3;
+    int16_t dig_P4;
+    int16_t dig_P5;
+    int16_t dig_P6;
+    int16_t dig_P7;
+    int16_t dig_P8;
+    int16_t dig_P9;
+    uint8_t dig_H1;
+    int16_t dig_H2;
+    uint8_t dig_H3;
+    int16_t dig_H4;
+    int16_t dig_H5;
+} saphBmeTrimmingValues_t;
+
 
 typedef struct saphBmeDevice_t {
     uint8_t address;
     uint8_t registerCtrlHumidity;
     uint8_t registerMeasureControl;
     uint8_t registerConfig;
-
+    saphBmeTrimmingValues_t trimmingValues;
 } saphBmeDevice_t;
+
+typedef struct saphBmeMeasurements_t {
+    uint32_t pressure;
+    uint32_t temperature;
+    uint16_t humidity;
+} saphBmeMeasurements_t;
+
+
 
 #define SAPH_BME280_NO_ERROR 0
 #define SAPH_BME280_COMM_ERROR_WRITE_AMOUNT -11
@@ -24,7 +52,7 @@ typedef struct saphBmeDevice_t {
 #define OVERSAMPLING_x8 0x04
 #define OVERSAMPLING_x16 0x05
 
-#define SAPHBME280_SENSOR_MODE_SLEEP 2
+#define SAPHBME280_SENSOR_MODE_SLEEP 0
 #define SAPHBME280_SENSOR_MODE_FORCED 2
 #define SAPHBME280_SENSOR_MODE_NORMAL 3
 
@@ -66,8 +94,10 @@ int32_t saphBme280_commitCtrlHumidity(saphBmeDevice_t* device);
 int32_t saphBme280_status(saphBmeDevice_t* device, uint8_t* buffer);
 
 int32_t
-saphBme280_getRawMeasurement(saphBmeDevice_t* device, uint32_t* pressure, uint32_t* temp, uint32_t* humidity);
+saphBme280_getRawMeasurement(saphBmeDevice_t* device, saphBmeMeasurements_t* result);
 
 int32_t saphBme280_getPressure(saphBmeDevice_t* device, uint32_t* resultBuffer);
+
+int32_t saphBme280_readTrimmingValues(saphBmeDevice_t* device);
 
 #endif // SAPHBME280_H
