@@ -209,20 +209,10 @@ static void integration_getRawMeasurements(saphBmeDevice_t* device) {
         return;
     }
     sleep_ms(100);
-//
-//    uint8_t bufferSent[] = {0xF2};
-//    i2c_handler_write(device->address, bufferSent, 1);
-//    uint8_t bufferReceived[12];
-//    memset(bufferReceived, 0xAB, 12);
-//    i2c_handler_read(device->address, bufferReceived, 12);
-//    printf("reading all: ");
-//    for (int i = 0; i < 12; ++i) {
-//        printf("%u,", bufferReceived[i]);
-//    }
 
     printf("\nwaiting for measurements to kick in...\n");
 
-    saphBmeMeasurements_t result[20];
+    saphBmeRawMeasurements_t result[20];
     for (int j = 0; j < 20; ++j) {
         errorCode = saphBme280_getRawMeasurement(device, &result[j]);
         if (errorCode != SAPH_BME280_NO_ERROR) {
@@ -231,16 +221,9 @@ static void integration_getRawMeasurements(saphBmeDevice_t* device) {
         sleep_ms(10);
     }
     for (int k = 0; k < 20; ++k) {
-        printf("pressure %lu, temp %lu, humidity%u\n", result[k].pressure, result[k].temperature, result[k].humidity);
+        printf("pressure %ld, temp %ld, humidity %d\n", result[k].pressure, result[k].temperature, result[k].humidity);
     }
-//
-//    errorCode = saphBme280_getRawMeasurement(device, &result);
-//    if (errorCode != SAPH_BME280_NO_ERROR) {
-//        printError(errorCode, "getting raw measurement");
-//    } else {
-//        printf("successful\n");
-//        printf("pressure %lu, temp %lu, humidity%u\n\n", result.pressure, result.temperature, result.humidity);
-//    }
+
 }
 
 static void integration_getPressureValue(saphBmeDevice_t* device) {
@@ -266,9 +249,9 @@ static void integration_getPressureValue(saphBmeDevice_t* device) {
     printf("\n\n");
 }
 
-static void integration_getTrimmingValues(saphBmeDevice_t* device){
+static void integration_getTrimmingValues(saphBmeDevice_t* device) {
     int32_t errorCode = saphBme280_readTrimmingValues(device);
-    if(errorCode != SAPH_BME280_NO_ERROR){
+    if (errorCode != SAPH_BME280_NO_ERROR) {
         printError(errorCode, "reading Trimming values");
     }
     printf("successful\ntrimmingValues: ");
@@ -291,7 +274,8 @@ static void integration_getTrimmingValues(saphBmeDevice_t* device){
     printf("%d, ", trimmingVals.dig_H2);
     printf("%u, ", trimmingVals.dig_H3);
     printf("%d, ", trimmingVals.dig_H4);
-    printf("%d\n\n", trimmingVals.dig_H5);
+    printf("%d, ", trimmingVals.dig_H5);
+    printf("%d\n\n", trimmingVals.dig_H6);
 }
 
 // ############################

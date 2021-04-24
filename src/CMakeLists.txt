@@ -17,10 +17,22 @@ target_link_libraries(saphBme280
         hardware_gpio
         )
 
+
+add_library(saphBme280_internal STATIC
+        saphBme280_internal.c
+        )
+
+target_link_libraries(saphBme280_internal
+        pico_stdlib
+        pico_time
+        hardware_i2c
+        hardware_gpio
+        )
+
+
 # I2C helper lib to make the rest testable.
 add_library(i2c_handler STATIC
-        i2c_handler.c
-        )
+        i2c_handler.c)
 
 target_link_libraries(i2c_handler
         pico_stdlib

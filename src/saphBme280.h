@@ -4,6 +4,7 @@
 #define SAPHBME280_H
 
 #include <stdint.h>
+
 typedef struct saphBmeTrimmingValues_t {
     uint16_t dig_T1;
     int16_t dig_T2;
@@ -22,8 +23,8 @@ typedef struct saphBmeTrimmingValues_t {
     uint8_t dig_H3;
     int16_t dig_H4;
     int16_t dig_H5;
+    int8_t dig_H6;
 } saphBmeTrimmingValues_t;
-
 
 typedef struct saphBmeDevice_t {
     uint8_t address;
@@ -33,13 +34,17 @@ typedef struct saphBmeDevice_t {
     saphBmeTrimmingValues_t trimmingValues;
 } saphBmeDevice_t;
 
+typedef struct saphBmeRawMeasurements_t {
+    int32_t pressure;
+    int32_t temperature;
+    int32_t humidity;
+} saphBmeRawMeasurements_t;
+
 typedef struct saphBmeMeasurements_t {
     uint32_t pressure;
-    uint32_t temperature;
-    uint16_t humidity;
+    int32_t temperature;
+    uint32_t humidity;
 } saphBmeMeasurements_t;
-
-
 
 #define SAPH_BME280_NO_ERROR 0
 #define SAPH_BME280_COMM_ERROR_WRITE_AMOUNT -11
@@ -94,10 +99,11 @@ int32_t saphBme280_commitCtrlHumidity(saphBmeDevice_t* device);
 int32_t saphBme280_status(saphBmeDevice_t* device, uint8_t* buffer);
 
 int32_t
-saphBme280_getRawMeasurement(saphBmeDevice_t* device, saphBmeMeasurements_t* result);
+saphBme280_getRawMeasurement(saphBmeDevice_t* device, saphBmeRawMeasurements_t* result);
 
 int32_t saphBme280_getPressure(saphBmeDevice_t* device, uint32_t* resultBuffer);
 
 int32_t saphBme280_readTrimmingValues(saphBmeDevice_t* device);
+
 
 #endif // SAPHBME280_H

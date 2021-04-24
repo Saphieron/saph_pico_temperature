@@ -43,7 +43,7 @@ void test_saphBme280_initialises(void) {
 
 void test_saphBme280_getId(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
-    uint8_t expectedDeviceId = 0x58; //according to the BME280 datasheet
+    uint8_t expectedDeviceId = 0x60; //according to the BME280 datasheet
     uint8_t idRegisterAddr = 0xD0;
 
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &idRegisterAddr, 1, 1, 1);
@@ -505,45 +505,50 @@ void test_saphBme280_getstatus_returnsErrorOnWrongAmountRead(void) {
 #define MEASUREMENT_SIZE 8
 
 void test_saphBme280_getRawAllMeasurements_returnsPressureThroughStruct(void) {
+    // TODO: In general the raw value appears to be wrong as other code works with something in the range of 528112
+    // TODO: Kind of twice the amount i was seeing here. Now what
+
+//    int8_t something = 0x0F;
+//    printf("0x%2X\n", something << 3);
+//    TEST_FAIL_MESSAGE("the xlsb bits are not taken properly from 0xF9");
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
-    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCC, 0xCB, 0xCA};
-    uint32_t expectedPressure = (response[0] << 11) + (response[1] << 3) + (LOWEST_THREE_BITS & response[2]);
-
-    saphBmeMeasurements_t result;
+    uint8_t response[] = {0xFF, 0x00, 0xD0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    int32_t expectedPressure = (response[0] << 12) + (response[1] << 4) + (response[2] >> 4);
+    saphBmeRawMeasurements_t result;
     result.pressure = 0;
 
     i2c_handler_read_ExpectAnyArgsAndReturn(MEASUREMENT_SIZE);
     i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
     int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
-    TEST_ASSERT_EQUAL_UINT32(expectedPressure, result.pressure);
+    TEST_ASSERT_EQUAL_INT32(expectedPressure, result.pressure);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsTemperatureThroughStruct(void) {
+//    TEST_FAIL_MESSAGE("the xlsb bits are not taken properly from 0xFC");
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
-    uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCB, 0xCA};
-    uint32_t expectedTemp = (response[3] << 11) + (response[4] << 3) + (LOWEST_THREE_BITS & response[5]);
-    saphBmeMeasurements_t result;
+    uint8_t response[] = {0x00, 0x00, 0x00, 0xFF, 0x00, 0xD0, 0x00, 0x00};
+    int32_t expectedTemp = (response[3] << 12) + (response[4] << 4) + (response[5] >> 4);
+    saphBmeRawMeasurements_t result;
     result.temperature = 0;
 
     i2c_handler_read_ExpectAnyArgsAndReturn(MEASUREMENT_SIZE);
     i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
     int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
-
-    TEST_ASSERT_EQUAL_UINT32(expectedTemp, result.temperature);
+    TEST_ASSERT_EQUAL_INT32(expectedTemp, result.temperature);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsHumidityInItsPointers(void) {
     saphBmeDevice_t fakeDevice = helper_createBmeDevice();
     uint8_t startingRegister = 0xF7; // the pressure register
     uint8_t response[] = {0xAC, 0xAB, 0xAA, 0xBC, 0xBB, 0xBA, 0xCB, 0xCA};
-    uint32_t expectedHumidity = (response[6] << 8) + (response[7]);
-    saphBmeMeasurements_t result;
+    int32_t expectedHumidity = (response[6] << 8) + (response[7]);
+    saphBmeRawMeasurements_t result;
     result.humidity = 0;
 
     i2c_handler_write_ExpectWithArrayAndReturn(fakeDevice.address, &startingRegister, 1, 1, 1);
@@ -551,8 +556,7 @@ void test_saphBme280_getRawAllMeasurements_returnsHumidityInItsPointers(void) {
     i2c_handler_read_ReturnArrayThruPtr_buffer(response, MEASUREMENT_SIZE);
     int32_t errorCode = saphBme280_getRawMeasurement(&fakeDevice, &result);
     TEST_ASSERT_EQUAL_INT32(NO_ERROR, errorCode);
-
-    TEST_ASSERT_EQUAL_UINT32(expectedHumidity, result.humidity);
+    TEST_ASSERT_EQUAL_INT32(expectedHumidity, result.humidity);
 }
 
 void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedWrite(void) {
@@ -598,7 +602,7 @@ void test_saphBme280_getRawAllMeasurements_returnsErrorCodeForFailedRead(void) {
 
 #define firstBurstReadAmount 25
 #define secondBurstReadAmount 1
-#define thirdBurstReadAmount 6
+#define thirdBurstReadAmount 7
 uint8_t trimmingFirstResponse[firstBurstReadAmount];
 uint8_t trimmingSecondResponse[secondBurstReadAmount];
 uint8_t trimmingThirdResponse[thirdBurstReadAmount];
@@ -633,14 +637,12 @@ static void helper_prepareI2cBurstRead(saphBmeDevice_t* fakeDevice) {
     i2c_handler_read_ReturnArrayThruPtr_buffer(trimmingThirdResponse, thirdBurstReadAmount);
 }
 
-static void
-helper_checkUnsignedTrimmingValue(const uint8_t* expectedValue, const uint16_t* actual) {
+static void helper_checkUnsignedTrimmingValue(const uint8_t* expectedValue, const uint16_t* actual) {
     uint16_t expectedResult = (expectedValue[1] << 8) + expectedValue[0];
     TEST_ASSERT_EQUAL_UINT16(expectedResult, *actual);
 }
 
-static void
-helper_checkSignedTrimmingValue(const uint8_t* expectedValue, const int16_t* actual) {
+static void helper_checkSignedTrimmingValue(const uint8_t* expectedValue, const int16_t* actual) {
     uint16_t expectedDigT1 = (expectedValue[1] << 8) + expectedValue[0];
     TEST_ASSERT_EQUAL_UINT16(expectedDigT1, *actual);
 }
@@ -700,6 +702,8 @@ void test_saphBme280_readTrimmingValues_checkHumidityTrimmingValues(void) {
 
     int16_t expectedH5 = (trimmingThirdResponse[5] << 4) + (trimmingThirdResponse[4] >> 4);
     TEST_ASSERT_EQUAL_INT16(expectedH5, trimmingValues.dig_H5);
+
+    TEST_ASSERT_EQUAL_INT8(trimmingThirdResponse[6], trimmingValues.dig_H6);
 }
 
 void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedFirstWrite(void) {
@@ -766,3 +770,4 @@ void test_saphBme280_readTrimmingValues_returnsErrorCodeOnFailedThirdRead(void) 
     int32_t errorCode = saphBme280_readTrimmingValues(&fakeDevice);
     TEST_ASSERT_EQUAL_INT32(READ_ERROR, errorCode);
 }
+
