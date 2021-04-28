@@ -15,6 +15,7 @@ target_link_libraries(saphBme280
         pico_time
         hardware_i2c
         hardware_gpio
+        saphBme280_internal
         )
 
 

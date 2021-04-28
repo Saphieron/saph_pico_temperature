@@ -1,5 +1,3 @@
-#include <sched.h>
-
 #ifndef SAPHBME280_H
 #define SAPHBME280_H
 
@@ -29,16 +27,10 @@ typedef struct saphBmeTrimmingValues_t {
 typedef struct saphBmeDevice_t {
     uint8_t address;
     uint8_t registerCtrlHumidity;
-    uint8_t registerMeasureControl;
+    uint8_t registerMeasureCtrl;
     uint8_t registerConfig;
     saphBmeTrimmingValues_t trimmingValues;
 } saphBmeDevice_t;
-
-typedef struct saphBmeRawMeasurements_t {
-    int32_t pressure;
-    int32_t temperature;
-    int32_t humidity;
-} saphBmeRawMeasurements_t;
 
 typedef struct saphBmeMeasurements_t {
     uint32_t pressure;
@@ -49,6 +41,8 @@ typedef struct saphBmeMeasurements_t {
 #define SAPH_BME280_NO_ERROR 0
 #define SAPH_BME280_COMM_ERROR_WRITE_AMOUNT -11
 #define SAPH_BME280_COMM_ERROR_READ_AMOUNT -12
+#define SAPH_BME280_NULL_POINTER_ERROR -20
+#define SAPH_BME280_RESERVED_ADDR_ERROR -30
 
 #define OVERSAMPLING_SKIP 0x00
 #define OVERSAMPLING_x1 0x01
@@ -76,19 +70,18 @@ typedef struct saphBmeMeasurements_t {
 #define SAPHBME280_IIR_FILTER_COEFFICIENT_8 0x03
 #define SAPHBME280_IIR_FILTER_COEFFICIENT_16 0x04
 
-saphBmeDevice_t saphBme280_init(uint8_t address);
+int32_t saphBme280_init(uint8_t address, saphBmeDevice_t* device);
 
 int32_t saphBme280_getId(saphBmeDevice_t* device);
 
 int32_t saphBme280_resetDevice(saphBmeDevice_t* device);
 
-void
-saphBme280_prepareMeasureControlReg(saphBmeDevice_t* device, uint8_t tempOversampling, uint8_t pressureOversampling,
-                                    uint8_t sensorMode);
+void saphBme280_prepareMeasureCtrlReg(saphBmeDevice_t* device, uint8_t tempOversampling, uint8_t pressureOversampling,
+                                      uint8_t sensorMode);
 
-int32_t saphBme280_commitMeasureControlReg(saphBmeDevice_t* device);
+int32_t saphBme280_commitMeasureCtrlReg(saphBmeDevice_t* device);
 
-void saphBme280_prepareConfigurationReg(saphBmeDevice_t* device, uint8_t standbyTime, uint8_t iirFilterCoefficient);
+void saphBme280_prepareConfigReg(saphBmeDevice_t* device, uint8_t standbyTime, uint8_t iirFilterCoefficient);
 
 int32_t saphBme280_commitConfigReg(saphBmeDevice_t* device);
 
@@ -98,12 +91,8 @@ int32_t saphBme280_commitCtrlHumidity(saphBmeDevice_t* device);
 
 int32_t saphBme280_status(saphBmeDevice_t* device, uint8_t* buffer);
 
-int32_t
-saphBme280_getRawMeasurement(saphBmeDevice_t* device, saphBmeRawMeasurements_t* result);
+int32_t saphBme280_getMeasurements(saphBmeDevice_t* device, saphBmeMeasurements_t* result);
 
 int32_t saphBme280_getPressure(saphBmeDevice_t* device, uint32_t* resultBuffer);
-
-int32_t saphBme280_readTrimmingValues(saphBmeDevice_t* device);
-
 
 #endif // SAPHBME280_H
