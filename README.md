@@ -9,7 +9,7 @@ There are some CMake targets that are not meant to work in their current configu
 
 - Raspberry Pi Pico
 - Bosch BME280
-- Some OLED screen i haven't decided on.
+- A 0.91" OLED screen using the SSD1306 display controller
 
 ## How to use/import
-TBA
+More following soon

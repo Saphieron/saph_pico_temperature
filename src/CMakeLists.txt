@@ -14,7 +14,6 @@ target_link_libraries(saphBme280
         pico_stdlib
         pico_time
         hardware_i2c
-        hardware_gpio
         saphBme280_internal
         )
 
@@ -25,7 +24,26 @@ add_library(saphBme280_internal STATIC
 
 target_link_libraries(saphBme280_internal
         pico_stdlib
-        pico_time
+        hardware_i2c
+        hardware_gpio
+        )
+
+add_library(saph_ssd1306 STATIC
+        saph_ssd1306.c
+        )
+
+target_link_libraries(saph_ssd1306
+        pico_stdlib
+        hardware_i2c
+        hardware_gpio
+        )
+
+add_library(saph_ssd1306_internal STATIC
+        saph_ssd1306_internal.c
+        )
+
+target_link_libraries(saph_ssd1306_internal
+        pico_stdlib
         hardware_i2c
         hardware_gpio
         )
