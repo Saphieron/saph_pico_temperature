@@ -92,3 +92,4 @@ void test_saph_ssd1306_displayOn_returnsErrorOnFailedWrite(void) {
 // #############################################
 // # Test group _displayOn
 // #############################################
+
